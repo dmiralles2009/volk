@@ -60,6 +60,66 @@
 #include <inttypes.h>
 #include <stdio.h>
 
+#ifdef LV_HAVE_AVX2
+#include <immintrin.h>
+
+static inline void
+volk_16ic_s32f_deinterleave_32f_x2_a_avx2(float* iBuffer, float* qBuffer, const lv_16sc_t* complexVector,
+                                              const float scalar, unsigned int num_points)
+{
+  float* iBufferPtr = iBuffer;
+
+  unsigned int number = 0;
+  const unsigned int eighthPoints = num_points / 8;
+
+  __m128 iFloatValue;
+
+  const float iScalar= 1.0 / scalar;
+  __m256 invScalar = _mm256_set1_ps(iScalar);
+  __m256i complexVal, iIntVal, qIntVal;
+  int8_t* complexVectorPtr = (int8_t*)complexVector;
+
+  __m256i moveMaskI = _mm256_set_epi8(0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+                                     13, 12, 9, 8, 5, 4, 1, 0,
+                                     0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+                                     13, 12, 9, 8, 5, 4, 1, 0);
+  __m256i moveMaskQ = _mm256_set_epi8(0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+                                     15, 14, 11, 10, 7, 6, 3, 2,
+                                     0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+                                     15, 14, 11, 10, 7, 6, 3, 2);
+
+  for(;number < eighthPoints; number++){
+    complexVal = _mm256_load_si256((__m256i*)complexVectorPtr);
+    complexVectorPtr += 32;
+
+    iIntVal = _mm256_shuffle_epi8(complexVal, moveMaskI);
+    iIntVal = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(iIntVal));
+    iFloatValue = _mm256_cvtepi32_ps(iIntVal);
+    iFloatValue = _mm256_mul_ps(iFloatValue, invScalar);
+
+    qIntVal = _mm256_shuffle_epi8(complexVal, moveMaskQ);
+    qIntVal = _mm256_cvtepi16_epi32(_mm256_castsi256_si128(qIntVal));
+    qFloatValue = _mm256_cvtepi32_ps(qIntVal);
+    qFloatValue = _mm256_mul_ps(qFloatValue, invScalar);
+
+    _mm256_store_ps(iBufferPtr, iFloatValue);
+    _mm256_store_ps(qBufferPtr, qFloatValue);
+
+    iBufferPtr += 8;
+    qBufferPtr += 8;
+  }
+
+  number = eighthPoints * 8;
+  int16_t* sixteenTComplexVectorPtr = (int16_t*)&complexVector[number];
+  for(; number < num_points; number++){
+    *iBufferPtr++ = ((float)(*sixteenTComplexVectorPtr++)) * iScalar;
+    sixteenTComplexVectorPtr++;
+  }
+
+}
+#endif /* LV_HAVE_AVX2 */
+
+
 #ifdef LV_HAVE_SSE
 #include <xmmintrin.h>
 
