@@ -57,6 +57,68 @@
 #include <inttypes.h>
 #include <stdio.h>
 
+#ifdef LV_HAVE_AVX2
+#include <immintrin.h>
+
+static inline void
+volk_16ic_deinterleave_16i_x2_a_avx2(int16_t* iBuffer, int16_t* qBuffer, const lv_16sc_t* complexVector,
+                                       unsigned int num_points)
+{
+  unsigned int number = 0;
+  const int16_t* complexVectorPtr = (int16_t*)complexVector;
+  int16_t* iBufferPtr = iBuffer;
+  int16_t* qBufferPtr = qBuffer;
+
+  __m256i complexVal1, complexVal2, iIntVal1, iIntVal2, qIntVal1, qIntVal2;
+  __m256i moveMask1 = _mm256_set_epi8(0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+                                     13, 12, 9, 8, 5, 4, 1, 0,
+                                     0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+                                     13, 12, 9, 8, 5, 4, 1, 0);
+  __m256i moveMask2 = _mm256_set_epi8(0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+                                     15, 14, 11, 10, 7, 6, 3, 2,
+                                     0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+                                     15, 14, 11, 10, 7, 6, 3, 2);
+  const unsigned int sixteenthPoints = num_points / 16;
+
+  for(;number < sixteenthPoints; number++){
+    complexVal1 = _mm256_load_si256((__m256i*)complexVectorPtr);
+    complexVectorPtr += 16;
+    complexVal2 = _mm256_load_si256((__m256i*)complexVectorPtr);
+    complexVectorPtr += 16;
+
+    iIntVal1 = _mm256_shuffle_epi8(complexVal1, moveMask1);
+    iIntVal2 = _mm256_shuffle_epi8(complexVal2, moveMask1);
+
+    qIntVal1 = _mm256_shuffle_epi8(complexVal1, moveMask2);
+    qIntVal2 = _mm256_shuffle_epi8(complexVal2, moveMask2);
+
+    iIntVal1 = _mm256_permute4x64_epi64(iIntVal1, 0b11011000);
+    iIntVal2 = _mm256_permute4x64_epi64(iIntVal2, 0b11011000);
+
+    qIntVal1 = _mm256_permute4x64_epi64(qIntVal1, 0b11011000);
+    qIntVal2 = _mm256_permute4x64_epi64(qIntVal2, 0b11011000);
+
+    iIntVal1 = _mm256_permute2x128_si256(iIntVal1, iIntVal2, 0b00100000);
+    qIntVal1 = _mm256_permute2x128_si256(qIntVal1, qIntVal2, 0b00100000);
+
+    _mm256_store_si256((__m256i*)iBufferPtr, iIntVal1);
+    _mm256_store_si256((__m256i*)qBufferPtr, qIntVal1);
+
+    iBufferPtr += 16;
+    qBufferPtr += 16;
+  }
+
+  number = sixteenthPoints * 16;
+  for(; number < num_points; number++){
+    *iBufferPtr++ = *complexVectorPtr++;
+    *qBufferPtr++ = *complexVectorPtr++;
+    complexVectorPtr++;
+  }
+
+}
+#endif /* LV_HAVE_AVX2 */
+
+
 #ifdef LV_HAVE_SSSE3
 #include <tmmintrin.h>
 
