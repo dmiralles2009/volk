@@ -197,6 +197,51 @@ volk_8ic_deinterleave_real_16i_generic(int16_t* iBuffer, const lv_8sc_t* complex
 #endif /* LV_HAVE_GENERIC */
 
 
+#ifdef LV_HAVE_NEONV8
+#include <arm_neon.h>
+
+ static inline void
+ volk_8ic_deinterleave_real_16i_neon(int16_t *iBuffer, const lv_8sc_t *complexVector,
+                                     unsigned int num_points)
+{
+  unsigned int number = 0;
+  unsigned int sixteenth_points = num_points / 16;
+  const int8_t *complexVectorPtr = (const int8_t *)complexVector;
+  int16_t *iBufferPtr = iBuffer;
+
+  int8x8x4_t complexInput;
+  int16x8_t iVal1;
+  int16x8_t iVal2;
+
+  int16x8x2_t iVal;
+
+   for (number = 0; number < sixteenth_points; number++) {
+    // Load data into register
+    complexInput = vld4_s8(complexVectorPtr);
+
+     // Perform single to double precision conversion
+    iVal1 = vmovl_s8(complexInput.val[0]);
+    iVal2 = vmovl_s8(complexInput.val[2]);
+    iVal.val[0] = iVal1;
+    iVal.val[1] = iVal2;
+
+     // Store results into memory buffer
+    vst2q_s16(iBufferPtr, iVal);
+
+     // Update pointers
+    iBufferPtr += 16;
+    complexVectorPtr += 32;
+  }
+
+
+   for (number = sixteenth_points * 16; number < num_points; number++) {
+     *iBufferPtr++ = ((int16_t)(*complexVectorPtr++)) * 128;
+     complexVectorPtr++;
+  }
+}
+#endif /* LV_HAVE_NEONV8 */
+
+
 #endif /* INCLUDED_volk_8ic_deinterleave_real_16i_a_H */
 
 #ifndef INCLUDED_volk_8ic_deinterleave_real_16i_u_H
